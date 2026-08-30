@@ -25,13 +25,15 @@ def api_request(method: str, path: str, **kwargs):
 @st.cache_data(ttl=300, show_spinner=False)
 def discover_recipe_endpoint():
     response = api_request("GET", "/wp-json/wp/v2/types")
+    if response.status_code == 403:
+        return "recipe", {"name": "レシピ（推定）"}, "投稿種類の一覧は403で保護されているため、recipeへ直接テストします。"
     response.raise_for_status()
     types = response.json()
     for key, item in types.items():
         labels = item.get("labels", {})
         text = " ".join([key, item.get("name", ""), labels.get("singular_name", "")]).lower()
         if key == "recipe" or "recipe" in text or "レシピ" in text:
-            return item.get("rest_base") or key, item
+            return item.get("rest_base") or key, item, ""
     raise RuntimeError("REST APIで『レシピ』の投稿タイプが見つかりませんでした。")
 
 
@@ -122,8 +124,10 @@ st.success(f"{len(df)}件を読み込みました。登録状態はすべて『�
 st.dataframe(df[[c for c in ["Title", "Date", "季節", "種類", "Slug"] if c in df.columns]], use_container_width=True)
 
 try:
-    endpoint, type_info = discover_recipe_endpoint()
+    endpoint, type_info, endpoint_note = discover_recipe_endpoint()
     st.caption(f"接続先：{type_info.get('name', 'レシピ')}（REST API: {endpoint}）")
+    if endpoint_note:
+        st.warning(endpoint_note)
 except Exception as exc:
     st.error(f"WordPressへ接続できません：{exc}")
     st.stop()
